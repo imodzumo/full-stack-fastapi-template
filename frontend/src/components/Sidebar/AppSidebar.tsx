@@ -1,5 +1,6 @@
-import { Briefcase, Home, Users } from "lucide-react"
+import { BarChart3, Briefcase, Home, Users } from "lucide-react"
 
+import { canListUsers, canViewMetrics } from "@/authz"
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
 import {
@@ -20,9 +21,13 @@ const baseItems: Item[] = [
 export function AppSidebar() {
   const { user: currentUser } = useAuth()
 
-  const items = currentUser?.is_superuser
-    ? [...baseItems, { icon: Users, title: "Admin", path: "/admin" }]
-    : baseItems
+  const items = [...baseItems]
+  if (canListUsers(currentUser)) {
+    items.push({ icon: Users, title: "Users", path: "/admin" })
+  }
+  if (canViewMetrics(currentUser)) {
+    items.push({ icon: BarChart3, title: "Metrics", path: "/metrics" })
+  }
 
   return (
     <Sidebar collapsible="icon">

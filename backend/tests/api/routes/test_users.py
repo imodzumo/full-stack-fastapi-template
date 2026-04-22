@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app import crud
 from app.core.config import settings
 from app.core.security import verify_password
-from app.models import User, UserCreate
+from app.models import User, UserCreate, UserRole
 from tests.utils.user import create_random_user
 from tests.utils.utils import random_email, random_lower_string
 
@@ -19,7 +19,7 @@ def test_get_users_superuser_me(
     current_user = r.json()
     assert current_user
     assert current_user["is_active"] is True
-    assert current_user["is_superuser"]
+    assert current_user["role"] == UserRole.admin
     assert current_user["email"] == settings.FIRST_SUPERUSER
 
 
@@ -30,7 +30,7 @@ def test_get_users_normal_user_me(
     current_user = r.json()
     assert current_user
     assert current_user["is_active"] is True
-    assert current_user["is_superuser"] is False
+    assert current_user["role"] == UserRole.member
     assert current_user["email"] == settings.EMAIL_TEST_USER
 
 
@@ -176,6 +176,18 @@ def test_create_user_by_normal_user(
     assert r.status_code == 403
 
 
+def test_create_user_by_manager(
+    client: TestClient, manager_token_headers: dict[str, str]
+) -> None:
+    data = {"email": random_email(), "password": random_lower_string()}
+    r = client.post(
+        f"{settings.API_V1_STR}/users/",
+        headers=manager_token_headers,
+        json=data,
+    )
+    assert r.status_code == 403
+
+
 def test_retrieve_users(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
@@ -196,6 +208,27 @@ def test_retrieve_users(
     assert "count" in all_users
     for item in all_users["data"]:
         assert "email" in item
+
+
+def test_retrieve_users_as_manager(
+    client: TestClient, manager_token_headers: dict[str, str], db: Session
+) -> None:
+    user_in = UserCreate(email=random_email(), password=random_lower_string())
+    crud.create_user(session=db, user_create=user_in)
+
+    r = client.get(f"{settings.API_V1_STR}/users/", headers=manager_token_headers)
+    all_users = r.json()
+
+    assert r.status_code == 200
+    assert len(all_users["data"]) > 0
+    assert "count" in all_users
+
+
+def test_retrieve_users_as_member(
+    client: TestClient, normal_user_token_headers: dict[str, str]
+) -> None:
+    r = client.get(f"{settings.API_V1_STR}/users/", headers=normal_user_token_headers)
+    assert r.status_code == 403
 
 
 def test_update_user_me(
@@ -381,6 +414,18 @@ def test_update_user(
     assert user_db.full_name == "Updated_full_name"
 
 
+def test_update_user_by_manager_forbidden(
+    client: TestClient, manager_token_headers: dict[str, str], db: Session
+) -> None:
+    user = create_random_user(db)
+    r = client.patch(
+        f"{settings.API_V1_STR}/users/{user.id}",
+        headers=manager_token_headers,
+        json={"full_name": "Updated_full_name"},
+    )
+    assert r.status_code == 403
+
+
 def test_update_user_not_exists(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
@@ -457,7 +502,7 @@ def test_delete_user_me_as_superuser(
     )
     assert r.status_code == 403
     response = r.json()
-    assert response["detail"] == "Super users are not allowed to delete themselves"
+    assert response["detail"] == "Admins are not allowed to delete themselves"
 
 
 def test_delete_user_super_user(
@@ -502,7 +547,7 @@ def test_delete_user_current_super_user_error(
         headers=superuser_token_headers,
     )
     assert r.status_code == 403
-    assert r.json()["detail"] == "Super users are not allowed to delete themselves"
+    assert r.json()["detail"] == "Admins are not allowed to delete themselves"
 
 
 def test_delete_user_without_privileges(
@@ -519,3 +564,14 @@ def test_delete_user_without_privileges(
     )
     assert r.status_code == 403
     assert r.json()["detail"] == "The user doesn't have enough privileges"
+
+
+def test_delete_user_by_manager_forbidden(
+    client: TestClient, manager_token_headers: dict[str, str], db: Session
+) -> None:
+    user = create_random_user(db)
+    r = client.delete(
+        f"{settings.API_V1_STR}/users/{user.id}",
+        headers=manager_token_headers,
+    )
+    assert r.status_code == 403

@@ -2,6 +2,7 @@ import { EllipsisVertical } from "lucide-react"
 import { useState } from "react"
 
 import type { UserPublic } from "@/client"
+import { canManageUsers } from "@/authz"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -20,7 +21,7 @@ export const UserActionsMenu = ({ user }: UserActionsMenuProps) => {
   const [open, setOpen] = useState(false)
   const { user: currentUser } = useAuth()
 
-  if (user.id === currentUser?.id) {
+  if (user.id === currentUser?.id || !canManageUsers(currentUser)) {
     return null
   }
 

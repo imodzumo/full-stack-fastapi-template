@@ -1,7 +1,8 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { Suspense } from "react"
 
+import { canCreateUsers, canListUsers } from "@/authz"
 import { type UserPublic, UsersService } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
 import { columns, type UserTableData } from "@/components/Admin/columns"
@@ -20,10 +21,8 @@ export const Route = createFileRoute("/_layout/admin")({
   component: Admin,
   beforeLoad: async () => {
     const user = await UsersService.readUserMe()
-    if (!user.is_superuser) {
-      throw redirect({
-        to: "/",
-      })
+    if (!canListUsers(user)) {
+      throw new Error("FORBIDDEN")
     }
   },
   head: () => ({
@@ -56,6 +55,8 @@ function UsersTable() {
 }
 
 function Admin() {
+  const { user: currentUser } = useAuth()
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -65,7 +66,7 @@ function Admin() {
             Manage user accounts and permissions
           </p>
         </div>
-        <AddUser />
+        {canCreateUsers(currentUser) && <AddUser />}
       </div>
       <UsersTable />
     </div>

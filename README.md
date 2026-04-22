@@ -210,6 +210,43 @@ The input variables, with their default values (some auto generated) are:
 
 Backend docs: [backend/README.md](./backend/README.md).
 
+## RBAC Implementation
+
+This project uses role-based access control with a single `role` field on users. The supported roles are `admin`, `manager`, and `member`.
+
+| Action | admin | manager | member |
+| --- | --- | --- | --- |
+| List all users | yes | yes | no |
+| Create user | yes | no | no |
+| View metrics | yes | yes | no |
+| View/update own profile | yes | yes | yes |
+| View/update/delete any profile | yes | no | no |
+
+Authorization checks live in FastAPI dependencies in `backend/app/api/deps.py`. Route handlers declare the roles they accept with `require_roles(...)`, and ownership-sensitive handlers use a small `is_admin(...)` helper so member and manager access stays scoped to their own resources unless a route explicitly grants more. The backend is the source of truth for permissions; the frontend only uses capability helpers to hide navigation and controls the user cannot use.
+
+Roles are stored directly on the `user` table and returned in `UserPublic`, so the frontend learns the current user's capabilities from `/api/v1/users/me`. New signups default to `member`. The configured first superuser is seeded as `admin`, and managers/non-admin users can be created from the admin user management screen or directly through the database/API.
+
+To run locally, start the stack and apply migrations:
+
+```bash
+docker compose up -d
+docker compose exec backend alembic upgrade head
+```
+
+Initial data is created by the backend prestart script. It seeds `FIRST_SUPERUSER` from `.env` as an `admin`; use the admin UI to create a `manager` and `member`, or create users through `/api/v1/users/` while authenticated as an admin.
+
+Run backend tests with:
+
+```bash
+docker compose exec backend bash scripts/test.sh
+```
+
+After backend API schema changes, regenerate the frontend client with:
+
+```bash
+bash scripts/generate-client.sh
+```
+
 ## Frontend Development
 
 Frontend docs: [frontend/README.md](./frontend/README.md).
